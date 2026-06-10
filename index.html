@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Xray 3x-ui智能匹配系统</title>
+    <title>Xray 智能节点匹配系统 Pro</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f3f4f6; color: #333; margin: 0; padding: 20px; }
         .container { max-width: 1200px; margin: 0 auto; background: #fff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
@@ -40,7 +40,7 @@
 <body>
 
 <div class="container">
-    <h1>🚀 Xray 3x-ui智能匹配系统</h1>
+    <h1>🚀 Xray 智能路由匹配系统 Pro</h1>
 
     <div class="auth-section">
         <label for="authCode">🔐 授权卡密：</label>
@@ -78,8 +78,12 @@
 </div>
 
 <script>
-    // ✅ 在这里设置你的全局无限次卡密
-    const VALID_KAMI = "bx666";
+    // ✅ 【卡密管理区】在这里设置你的卡密和对应的到期时间
+    const authDatabase = {
+        "bx666": "2099-12-31",      // 永久卡密 (时间设得很远即可)
+        "test01": "2026-06-30",     // 限制有效期的测试卡密
+        "guest88": "2026-06-11"     // 只能用到某一天的卡密
+    };
 
     // 页面加载时，尝试读取本地缓存的卡密
     window.onload = function() {
@@ -89,18 +93,41 @@
         }
     };
 
+    // 校验卡密核心逻辑
+    function validateCode(inputCode) {
+        // 1. 检查卡密是否存在
+        if (!authDatabase.hasOwnProperty(inputCode)) {
+            return { valid: false, msg: "卡密不存在或填写错误！" };
+        }
+        
+        // 2. 检查卡密是否过期
+        const expireDateStr = authDatabase[inputCode];
+        const expireDate = new Date(expireDateStr + "T23:59:59"); // 设定为当天最后一秒过期
+        const currentDate = new Date();
+
+        if (currentDate > expireDate) {
+            return { valid: false, msg: `您的卡密已于 ${expireDateStr} 过期！` };
+        }
+
+        return { valid: true, msg: "验证通过" };
+    }
+
     function generateConfig() {
         const statusMsg = document.getElementById('statusMessage');
         const authCode = document.getElementById('authCode').value.trim();
 
-        // 1. 卡密验证逻辑
-        if (authCode !== VALID_KAMI) {
-            statusMsg.textContent = "❌ 验证失败：卡密无效或已过期！请联系管理员。";
+        // 执行卡密验证
+        const authResult = validateCode(authCode);
+
+        if (!authResult.valid) {
+            statusMsg.textContent = "❌ 验证失败：" + authResult.msg;
             statusMsg.className = "status-msg error-msg";
-            alert("❌ 卡密错误，拒绝访问！");
+            alert("❌ 验证失败：" + authResult.msg);
+            // 验证失败时清除本地缓存，防止死循环使用过期卡密
+            localStorage.removeItem("xray_auth_code");
             return; // 终止执行
         } else {
-            // 验证通过，将卡密存入本地浏览器缓存，下次打开自动填充
+            // 验证通过，存入本地缓存
             localStorage.setItem("xray_auth_code", authCode);
         }
 
@@ -113,7 +140,7 @@
             return;
         }
 
-        // 2. 解析 VLESS 链接提取名字
+        // 解析 VLESS 链接提取名字
         const ipToNameMap = {};
         const ipRegex = /\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b/;
         
@@ -132,7 +159,7 @@
             }
         });
 
-        // 3. 解析 SOCKS5 并匹配
+        // 解析 SOCKS5 并匹配
         const outbounds = [];
         const routing = [];
         const socksLines = socksText.split('\n');
@@ -174,7 +201,7 @@
             }
         });
 
-        // 4. 渲染输出
+        // 渲染输出
         document.getElementById('outbounds').value = JSON.stringify(outbounds, null, 2);
         document.getElementById('routing').value = JSON.stringify(routing, null, 2);
 
