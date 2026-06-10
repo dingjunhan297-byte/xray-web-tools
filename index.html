@@ -10,10 +10,15 @@
         h1 { text-align: center; color: #1f2937; margin-top: 0; margin-bottom: 20px; }
         
         /* 卡密验证区域样式 */
-        .auth-section { background-color: #eff6ff; border: 1px solid #bfdbfe; padding: 15px 20px; border-radius: 8px; margin-bottom: 25px; display: flex; align-items: center; gap: 15px; }
+        .auth-container { margin-bottom: 25px; }
+        .auth-section { background-color: #eff6ff; border: 1px solid #bfdbfe; padding: 15px 20px; border-radius: 8px; display: flex; align-items: center; gap: 15px; }
         .auth-section label { margin-bottom: 0; color: #1e3a8a; font-weight: bold; white-space: nowrap; }
         .auth-section input { flex: 1; padding: 10px; border: 1px solid #93c5fd; border-radius: 6px; outline: none; font-size: 16px; font-family: monospace; color: #1e3a8a; }
         .auth-section input:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
+        
+        /* 新增：到期时间展示样式 */
+        .expire-info { font-size: 13px; margin-top: 8px; margin-left: 5px; color: #6b7280; font-weight: bold; min-height: 18px; }
+        .expire-info.active { color: #059669; }
 
         .input-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
         @media (max-width: 768px) { .input-grid { grid-template-columns: 1fr; } }
@@ -42,9 +47,12 @@
 <div class="container">
     <h1>🚀 Xray 智能路由匹配系统 Pro</h1>
 
-    <div class="auth-section">
-        <label for="authCode">🔐 授权卡密：</label>
-        <input type="password" id="authCode" placeholder="请输入您的专属授权卡密..." autocomplete="off">
+    <div class="auth-container">
+        <div class="auth-section">
+            <label for="authCode">🔐 授权卡密：</label>
+            <input type="password" id="authCode" placeholder="请输入您的专属授权卡密..." autocomplete="off">
+        </div>
+        <div id="expireInfo" class="expire-info"></div>
     </div>
 
     <div class="input-grid">
@@ -80,40 +88,57 @@
 <script>
     // ✅ 【卡密管理区】在这里设置你的卡密和对应的到期时间
     const authDatabase = {
-        "bx666": "2099-12-31",      // 永久卡密 (时间设得很远即可)
+        "bx666": "2099-12-31",      // 永久卡密 (年份设得很远，系统会自动识别为"永久有效")
         "test01": "2026-06-30",     // 限制有效期的测试卡密
         "guest88": "2026-06-11"     // 只能用到某一天的卡密
     };
 
-    // 页面加载时，尝试读取本地缓存的卡密
+    // 页面加载时，尝试读取本地缓存的卡密并悄悄验证展示
     window.onload = function() {
         const savedCode = localStorage.getItem("xray_auth_code");
-        if (savedCode) {
+        if (savedCode && authDatabase.hasOwnProperty(savedCode)) {
             document.getElementById('authCode').value = savedCode;
+            const authResult = validateCode(savedCode);
+            if(authResult.valid) {
+                showExpireStatus(savedCode);
+            }
         }
     };
 
+    // 新增：展示到期时间的函数
+    function showExpireStatus(code) {
+        const expireDiv = document.getElementById('expireInfo');
+        const expireDateStr = authDatabase[code];
+        
+        // 如果设定的年份是 2099 年，我们就展示为“永久有效”
+        if (expireDateStr.startsWith("2099")) {
+            expireDiv.innerHTML = `✅ 当前卡密状态：永久有效`;
+            expireDiv.className = "expire-info active";
+        } else {
+            expireDiv.innerHTML = `✅ 当前卡密有效至：${expireDateStr} (23:59前)`;
+            expireDiv.className = "expire-info active";
+        }
+    }
+
     // 校验卡密核心逻辑
     function validateCode(inputCode) {
-        // 1. 检查卡密是否存在
         if (!authDatabase.hasOwnProperty(inputCode)) {
             return { valid: false, msg: "卡密不存在或填写错误！" };
         }
         
-        // 2. 检查卡密是否过期
         const expireDateStr = authDatabase[inputCode];
-        const expireDate = new Date(expireDateStr + "T23:59:59"); // 设定为当天最后一秒过期
+        const expireDate = new Date(expireDateStr + "T23:59:59"); 
         const currentDate = new Date();
 
         if (currentDate > expireDate) {
             return { valid: false, msg: `您的卡密已于 ${expireDateStr} 过期！` };
         }
-
         return { valid: true, msg: "验证通过" };
     }
 
     function generateConfig() {
         const statusMsg = document.getElementById('statusMessage');
+        const expireDiv = document.getElementById('expireInfo');
         const authCode = document.getElementById('authCode').value.trim();
 
         // 执行卡密验证
@@ -122,13 +147,14 @@
         if (!authResult.valid) {
             statusMsg.textContent = "❌ 验证失败：" + authResult.msg;
             statusMsg.className = "status-msg error-msg";
+            expireDiv.innerHTML = ""; // 验证失败清空到期时间展示
             alert("❌ 验证失败：" + authResult.msg);
-            // 验证失败时清除本地缓存，防止死循环使用过期卡密
             localStorage.removeItem("xray_auth_code");
-            return; // 终止执行
+            return; 
         } else {
-            // 验证通过，存入本地缓存
+            // 验证成功，保存卡密并展示到期时间
             localStorage.setItem("xray_auth_code", authCode);
+            showExpireStatus(authCode);
         }
 
         const vlessText = document.getElementById('vlessLinks').value.trim();
@@ -206,10 +232,10 @@
         document.getElementById('routing').value = JSON.stringify(routing, null, 2);
 
         if (mismatchCount === 0) {
-            statusMsg.textContent = `✅ 卡密验证通过！完美匹配生成 ${matchCount} 条节点的专属规则。`;
+            statusMsg.textContent = `✅ 生成成功！完美匹配 ${matchCount} 条节点的专属规则。`;
             statusMsg.className = "status-msg";
         } else {
-            statusMsg.textContent = `⚠️ 卡密验证通过！生成 ${matchCount} 条，但有 ${mismatchCount} 个 SOCKS IP 未在 VLESS 中找到对应名字。`;
+            statusMsg.textContent = `⚠️ 生成成功！生成 ${matchCount} 条，但有 ${mismatchCount} 个 SOCKS IP 未在 VLESS 中找到对应名字。`;
             statusMsg.className = "status-msg error-msg";
         }
     }
